@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Box, CalendarDays, MoreHorizontal, Pencil, Repeat, Reply, Star, Tag, Trash2 } from 'lucide-react'
+import { Box, CalendarDays, GitMerge, GitPullRequest, MoreHorizontal, Pencil, Repeat, Reply, Star, Tag, Trash2 } from 'lucide-react'
+import { getPullRequests, type ApiPullRequest } from '../data/api'
 import { Menu, type MenuEntry } from '../components/Menu'
 import { AIBlock, summarizeIssue, useAiSummary } from '../components/AI'
 import { IssueLabels } from '../components/IssueRow'
@@ -64,6 +65,42 @@ const dateInput = (t: number | null) => {
   if (t === null) return ''
   const d = new Date(t)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const PR_STATE: Record<ApiPullRequest['state'], { label: string; color: string }> = {
+  open: { label: 'Open', color: '#4cb782' },
+  draft: { label: 'Draft', color: 'var(--text-tertiary)' },
+  merged: { label: 'Merged', color: '#a371f7' },
+  closed: { label: 'Closed', color: '#eb5757' },
+}
+
+/** GitHub PRs that mention this issue's key. Hidden when there are none (or GitHub isn't connected). */
+function PullRequests({ issueKey }: { issueKey: string }) {
+  const [prs, setPrs] = useState<ApiPullRequest[]>([])
+  useEffect(() => {
+    getPullRequests(issueKey).then(setPrs).catch(() => setPrs([]))
+  }, [issueKey])
+  if (!prs.length) return null
+  return (
+    <section style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
+      <h3 className="title-md" style={{ fontSize: 14, marginBottom: 12 }}>Pull requests</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {prs.map((p) => {
+          const s = PR_STATE[p.state]
+          const Icon = p.state === 'merged' ? GitMerge : GitPullRequest
+          return (
+            <a key={`${p.repo}#${p.number}`} href={p.url} target="_blank" rel="noreferrer" className="row" style={{ gap: 8 }}>
+              <Icon size={14} style={{ color: s.color, flexShrink: 0 }} />
+              <span style={{ color: 'var(--text-primary)' }}>{p.title}</span>
+              <span className="faint">{p.repo}#{p.number} · {p.author}</span>
+              <span className="spacer" />
+              <span className="badge-pill" style={{ color: s.color }}>{s.label}</span>
+            </a>
+          )
+        })}
+      </div>
+    </section>
+  )
 }
 
 function IssueDetailView({ issue }: { issue: Issue }) {
@@ -279,6 +316,8 @@ function IssueDetailView({ issue }: { issue: Issue }) {
               onChange={(e) => setDescription(e.target.value)}
               onBlur={() => description !== issue.description && updateIssue(issue.id, { description })}
             />
+
+            <PullRequests issueKey={issue.key} />
 
             <section style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
               <h3 className="title-md" style={{ fontSize: 14, marginBottom: 12 }}>Activity</h3>

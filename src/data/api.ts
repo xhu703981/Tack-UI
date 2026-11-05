@@ -355,3 +355,16 @@ export const githubInstallUrl = (): Promise<{ url: string }> => send(w('/integra
 export const connectGithub = (installation_id: number, state: string): Promise<ApiGithubStatus> =>
   send(w('/integrations/github/connect'), 'POST', { installation_id, state })
 export const disconnectGithub = (): Promise<null> => send(w('/integrations/github'), 'DELETE')
+
+/** A GitHub PR linked to an issue (it mentions the issue key in its branch, title or description). */
+export interface ApiPullRequest {
+  repo: string
+  number: number
+  title: string
+  url: string
+  state: 'open' | 'draft' | 'merged' | 'closed'
+  branch: string
+  author: string
+  created_at: string
+}
+export const getPullRequests = (issueKey: string): Promise<ApiPullRequest[]> => send(w(`/issues/${key(issueKey)}/pull-requests`), 'GET')
