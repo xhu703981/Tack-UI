@@ -21,7 +21,7 @@ import { CreateWorkspace, WorkspaceLink } from './pages/Workspaces'
 import { ConnectedAccounts, Profile, SecurityAccess } from './pages/settings/Personal'
 import { ApiSettings, MembersSettings, SecuritySettings, TeamsSettings, WorkspaceSettings } from './pages/settings/Admin'
 import { CreateTeam, TeamSettings } from './pages/settings/Teams'
-import { IntegrationDetail, Integrations } from './pages/settings/Integrations'
+import { GithubCallback, IntegrationDetail, Integrations } from './pages/settings/Integrations'
 
 function Home() {
   const { db } = useStore()
@@ -83,6 +83,7 @@ function AppRoutes() {
           <Route path="connected-accounts" element={<ConnectedAccounts />} />
           <Route path="integrations" element={<Integrations />} />
           <Route path="integrations/:integrationId" element={<IntegrationDetail />} />
+          <Route path="integrations/github/callback" element={<GithubCallback />} />
           <Route path="workspace" element={<WorkspaceSettings />} />
           <Route path="teams" element={<TeamsSettings />} />
           <Route path="teams/:teamKey" element={<TeamSettings />} />

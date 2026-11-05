@@ -21,7 +21,8 @@ export function createSeed(): Db {
     activity: [],
     views: [],
     integrations: [
-      { id: 'github', name: 'GitHub', description: 'Link pull requests and commits to issues.', color: '#24292e', enabled: true },
+      // GitHub's enabled is replaced by the backend's answer (Integrations page); the others are still mock.
+      { id: 'github', name: 'GitHub', description: 'Link pull requests and commits to issues.', color: '#24292e', enabled: false },
       { id: 'slack', name: 'Slack', description: 'Create issues and get notifications in Slack.', color: '#4a154b', enabled: true },
       { id: 'figma', name: 'Figma', description: 'Embed live Figma designs in issues.', color: '#a259ff', enabled: false },
       { id: 'gdrive', name: 'Google Drive', description: 'Attach Docs, Sheets and Slides to issues.', color: '#1fa463', enabled: false },

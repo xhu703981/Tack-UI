@@ -1,10 +1,28 @@
-import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { SettingsRow, Toggle } from '../../components/ui'
 import { PageHeader } from './Personal'
 import { useStore } from '../../data/store'
 import type { Integration } from '../../data/types'
+import { connectGithub, disconnectGithub, getGithub, githubInstallUrl, type ApiGithubStatus } from '../../data/api'
+
+/** The workspace's real GitHub connection (the other integrations are still mock). Also keeps the card's badge right. */
+function useGithub(active = true) {
+  const { setDb, toast } = useStore()
+  const [status, setStatus] = useState<ApiGithubStatus | null>(null)
+  const load = () =>
+    getGithub()
+      .then((s) => {
+        setStatus(s)
+        setDb((d) => ({ ...d, integrations: d.integrations.map((x) => (x.id === 'github' ? { ...x, enabled: s.connected } : x)) }))
+      })
+      .catch((e: Error) => toast(e.message))
+  useEffect(() => {
+    if (active) load()
+  }, [active])
+  return { status, load }
+}
 
 function Logo({ i, size = 32 }: { i: Integration; size?: number }) {
   return (
@@ -16,6 +34,7 @@ function Logo({ i, size = 32 }: { i: Integration; size?: number }) {
 
 export function Integrations() {
   const { db } = useStore()
+  useGithub()
   return (
     <div className="settings-page" style={{ maxWidth: 920 }}>
       <PageHeader title="Integrations" desc="Connect the workspace to the tools your team already uses." />
@@ -54,14 +73,28 @@ const OPTIONS: Record<string, { title: string; desc: string }[]> = {
 
 export function IntegrationDetail() {
   const { integrationId } = useParams()
-  const { db, setDb, toast } = useStore()
+  const { db, setDb, toast, isAdmin } = useStore()
   const i = db.integrations.find((x) => x.id === integrationId)
   const [opts, setOpts] = useState<Record<string, boolean>>({})
+  const isGithub = integrationId === 'github'
+  const github = useGithub(isGithub)
   if (!i) return <div className="empty-state">Integration not found.</div>
   const setEnabled = (enabled: boolean) => {
+    if (isGithub) {
+      // Connecting leaves Tack: GitHub's install page, then back to /settings/integrations/github/callback.
+      if (enabled) githubInstallUrl().then(({ url }) => window.location.assign(url)).catch((e: Error) => toast(e.message))
+      else
+        disconnectGithub()
+          .then(() => github.load())
+          .then(() => toast('GitHub disconnected'))
+          .catch((e: Error) => toast(e.message))
+      return
+    }
     setDb((d) => ({ ...d, integrations: d.integrations.map((x) => (x.id === i.id ? { ...x, enabled } : x)) }))
     toast(enabled ? `${i.name} connected` : `${i.name} disconnected`)
   }
+  // Only Admins can connect or disconnect GitHub (the backend checks too).
+  const locked = isGithub && !isAdmin
 
   return (
     <div className="settings-page">
@@ -75,11 +108,23 @@ export function IntegrationDetail() {
           <p className="muted" style={{ margin: 0 }}>{i.description}</p>
         </div>
         {i.enabled ? (
-          <button className="btn danger-outline" onClick={() => setEnabled(false)}>Disconnect</button>
+          <button className="btn danger-outline" disabled={locked} onClick={() => setEnabled(false)}>Disconnect</button>
         ) : (
-          <button className="btn primary" onClick={() => setEnabled(true)}>Connect {i.name}</button>
+          <button className="btn primary" disabled={locked} onClick={() => setEnabled(true)}>Connect {i.name}</button>
         )}
       </div>
+      {locked && <p className="faint" style={{ marginTop: -24, marginBottom: 24 }}>Only workspace Admins can change this.</p>}
+      {isGithub && github.status?.connected && (
+        <section className="settings-section" style={{ marginTop: 0 }}>
+          <h3>Connected to {github.status.account}</h3>
+          <div className="card" style={{ padding: '0 16px' }}>
+            {github.status.repositories.map((r) => (
+              <SettingsRow key={r} title={r} desc="Pull requests in this repository reach Tack." />
+            ))}
+          </div>
+          <p className="faint" style={{ marginTop: 8 }}>Add or remove repositories in the app's settings on GitHub.</p>
+        </section>
+      )}
       <section className="settings-section" style={{ opacity: i.enabled ? 1 : 0.5, pointerEvents: i.enabled ? undefined : 'none' }}>
         <h3>Configuration</h3>
         <div className="card" style={{ padding: '0 16px' }}>
@@ -91,6 +136,47 @@ export function IntegrationDetail() {
         </div>
         {!i.enabled && <p className="faint" style={{ marginTop: 8 }}>Connect {i.name} to configure it.</p>}
       </section>
+    </div>
+  )
+}
+
+/** GitHub's "Setup URL": after installing, GitHub sends the browser here with ?installation_id=…&state=…. */
+export function GithubCallback() {
+  const navigate = useNavigate()
+  const { toast } = useStore()
+  const [params] = useSearchParams()
+  const [error, setError] = useState('')
+  const sent = useRef(false) // StrictMode runs effects twice in development; connect once
+
+  useEffect(() => {
+    if (sent.current) return
+    sent.current = true
+    const id = params.get('installation_id')
+    const state = params.get('state')
+    const back = () => navigate('/settings/integrations/github', { replace: true })
+    // Repos changed from GitHub's own settings page: no state, nothing to connect. The detail page asks GitHub live.
+    if (params.get('setup_action') === 'update' && !state) return back()
+    // In an organization, a non-owner can only request the install; an owner has to approve it on GitHub.
+    if (params.get('setup_action') === 'request') return setError('Install requested: an owner of the GitHub organization has to approve it.')
+    if (!id || !state) return setError('GitHub sent no installation back. Try connecting again.')
+    connectGithub(Number(id), state)
+      .then(() => {
+        toast('GitHub connected')
+        back()
+      })
+      .catch((e: Error) => setError(e.message))
+  }, [])
+
+  return (
+    <div className="settings-page">
+      {error ? (
+        <>
+          <p className="danger-text">{error}</p>
+          <Link to="/settings/integrations/github">Back to GitHub</Link>
+        </>
+      ) : (
+        <p className="muted">Connecting GitHub…</p>
+      )}
     </div>
   )
 }

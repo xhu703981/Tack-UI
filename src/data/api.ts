@@ -342,3 +342,16 @@ export const createView = (teamKey: string, fields: { name: string; filters: Api
 export const updateView = (id: number, fields: { name?: string; filters?: ApiFilters; is_shared?: boolean }): Promise<ApiView> =>
   send(w(`/views/${id}`), 'PATCH', fields)
 export const deleteView = (id: number): Promise<null> => send(w(`/views/${id}`), 'DELETE')
+
+// GitHub integration: one GitHub App installation per workspace
+export interface ApiGithubStatus {
+  connected: boolean
+  account: string | null // the GitHub user or org the app is installed on
+  repositories: string[] // "owner/name"
+}
+export const getGithub = (): Promise<ApiGithubStatus> => send(w('/integrations/github'), 'GET')
+/** Where to send the browser to install the app; GitHub then redirects to /settings/integrations/github/callback. */
+export const githubInstallUrl = (): Promise<{ url: string }> => send(w('/integrations/github/install'), 'POST')
+export const connectGithub = (installation_id: number, state: string): Promise<ApiGithubStatus> =>
+  send(w('/integrations/github/connect'), 'POST', { installation_id, state })
+export const disconnectGithub = (): Promise<null> => send(w('/integrations/github'), 'DELETE')
