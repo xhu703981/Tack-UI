@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Box, CalendarDays, GitMerge, GitPullRequest, MoreHorizontal, Pencil, Repeat, Reply, Star, Tag, Trash2 } from 'lucide-react'
-import { getPullRequests, type ApiPullRequest } from '../data/api'
+import { Box, CalendarDays, GitCommitHorizontal, MoreHorizontal, Pencil, Repeat, Reply, Star, Tag, Trash2 } from 'lucide-react'
+import { getCommits, type ApiCommit } from '../data/api'
 import { Menu, type MenuEntry } from '../components/Menu'
 import { AIBlock, summarizeIssue, useAiSummary } from '../components/AI'
 import { IssueLabels } from '../components/IssueRow'
@@ -67,37 +67,31 @@ const dateInput = (t: number | null) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-const PR_STATE: Record<ApiPullRequest['state'], { label: string; color: string }> = {
-  open: { label: 'Open', color: '#4cb782' },
-  draft: { label: 'Draft', color: 'var(--text-tertiary)' },
-  merged: { label: 'Merged', color: '#a371f7' },
-  closed: { label: 'Closed', color: '#eb5757' },
+/** One commit as a row: first line of the message, where it is, who made it. Also used for unlinked commits. */
+export function CommitRow({ c }: { c: ApiCommit }) {
+  return (
+    <a href={c.url} target="_blank" rel="noreferrer" className="row" style={{ gap: 8 }}>
+      <GitCommitHorizontal size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+      <span style={{ color: 'var(--text-primary)' }}>{c.message.split('\n')[0]}</span>
+      <span className="faint">{c.repo}@{c.branch} · {c.author}</span>
+      <span className="spacer" />
+      <code className="faint">{c.sha.slice(0, 7)}</code>
+    </a>
+  )
 }
 
-/** GitHub PRs that mention this issue's key. Hidden when there are none (or GitHub isn't connected). */
-function PullRequests({ issueKey }: { issueKey: string }) {
-  const [prs, setPrs] = useState<ApiPullRequest[]>([])
+/** GitHub commits whose message names this issue's key. Hidden when there are none (or GitHub isn't connected). */
+function Commits({ issueKey }: { issueKey: string }) {
+  const [commits, setCommits] = useState<ApiCommit[]>([])
   useEffect(() => {
-    getPullRequests(issueKey).then(setPrs).catch(() => setPrs([]))
+    getCommits(issueKey).then(setCommits).catch(() => setCommits([]))
   }, [issueKey])
-  if (!prs.length) return null
+  if (!commits.length) return null
   return (
     <section style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
-      <h3 className="title-md" style={{ fontSize: 14, marginBottom: 12 }}>Pull requests</h3>
+      <h3 className="title-md" style={{ fontSize: 14, marginBottom: 12 }}>Commits</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {prs.map((p) => {
-          const s = PR_STATE[p.state]
-          const Icon = p.state === 'merged' ? GitMerge : GitPullRequest
-          return (
-            <a key={`${p.repo}#${p.number}`} href={p.url} target="_blank" rel="noreferrer" className="row" style={{ gap: 8 }}>
-              <Icon size={14} style={{ color: s.color, flexShrink: 0 }} />
-              <span style={{ color: 'var(--text-primary)' }}>{p.title}</span>
-              <span className="faint">{p.repo}#{p.number} · {p.author}</span>
-              <span className="spacer" />
-              <span className="badge-pill" style={{ color: s.color }}>{s.label}</span>
-            </a>
-          )
-        })}
+        {commits.map((c) => <CommitRow key={`${c.repo}@${c.sha}`} c={c} />)}
       </div>
     </section>
   )
@@ -317,7 +311,7 @@ function IssueDetailView({ issue }: { issue: Issue }) {
               onBlur={() => description !== issue.description && updateIssue(issue.id, { description })}
             />
 
-            <PullRequests issueKey={issue.key} />
+            <Commits issueKey={issue.key} />
 
             <section style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
               <h3 className="title-md" style={{ fontSize: 14, marginBottom: 12 }}>Activity</h3>

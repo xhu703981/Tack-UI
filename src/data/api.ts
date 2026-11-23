@@ -356,15 +356,16 @@ export const connectGithub = (installation_id: number, state: string): Promise<A
   send(w('/integrations/github/connect'), 'POST', { installation_id, state })
 export const disconnectGithub = (): Promise<null> => send(w('/integrations/github'), 'DELETE')
 
-/** A GitHub PR linked to an issue (it mentions the issue key in its branch, title or description). */
-export interface ApiPullRequest {
+/** A pushed GitHub commit. Linked to an issue when its message names the issue key (ENG-12). */
+export interface ApiCommit {
   repo: string
-  number: number
-  title: string
+  sha: string
+  message: string
   url: string
-  state: 'open' | 'draft' | 'merged' | 'closed'
-  branch: string
   author: string
-  created_at: string
+  branch: string
+  committed_at: string
 }
-export const getPullRequests = (issueKey: string): Promise<ApiPullRequest[]> => send(w(`/issues/${key(issueKey)}/pull-requests`), 'GET')
+export const getCommits = (issueKey: string): Promise<ApiCommit[]> => send(w(`/issues/${key(issueKey)}/commits`), 'GET')
+/** Commits whose message names no issue of the workspace. */
+export const getUnlinkedCommits = (): Promise<ApiCommit[]> => send(w('/integrations/github/unlinked-commits'), 'GET')

@@ -5,7 +5,8 @@ import { SettingsRow, Toggle } from '../../components/ui'
 import { PageHeader } from './Personal'
 import { useStore } from '../../data/store'
 import type { Integration } from '../../data/types'
-import { connectGithub, disconnectGithub, getGithub, githubInstallUrl, type ApiGithubStatus } from '../../data/api'
+import { connectGithub, disconnectGithub, getGithub, getUnlinkedCommits, githubInstallUrl, type ApiCommit, type ApiGithubStatus } from '../../data/api'
+import { CommitRow } from '../IssueDetail'
 
 /** The workspace's real GitHub connection (the other integrations are still mock). Also keeps the card's badge right. */
 function useGithub(active = true) {
@@ -55,12 +56,31 @@ export function Integrations() {
   )
 }
 
+/** Pushed commits whose message names no issue (newest 100). Each commit message should carry an issue ID like ENG-12. */
+function UnlinkedCommits() {
+  const [commits, setCommits] = useState<ApiCommit[]>([])
+  useEffect(() => {
+    getUnlinkedCommits().then(setCommits).catch(() => setCommits([]))
+  }, [])
+  return (
+    <section className="settings-section" style={{ marginTop: 0 }}>
+      <h3>Unlinked commits</h3>
+      <p className="faint" style={{ marginBottom: 8 }}>Commits whose message has no issue ID (like ENG-12) of this workspace.</p>
+      {commits.length ? (
+        <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {commits.map((c) => <CommitRow key={`${c.repo}@${c.sha}`} c={c} />)}
+        </div>
+      ) : (
+        <p className="muted">Every pushed commit is linked to an issue.</p>
+      )}
+    </section>
+  )
+}
+
 // Per-integration configuration options shown on the detail page (local UI state only).
 const OPTIONS: Record<string, { title: string; desc: string }[]> = {
   github: [
-    { title: 'Link pull requests automatically', desc: 'Attach PRs whose branch name contains an issue ID.' },
-    { title: 'Move issue to In Review when PR opens', desc: 'Update status as the pull request progresses.' },
-    { title: 'Close issue when PR merges', desc: 'Mark linked issues as Done on merge.' },
+    { title: 'Link commits automatically', desc: 'Attach commits whose message contains an issue ID.' },
   ],
   slack: [
     { title: 'Post new issues to a channel', desc: 'Send a message for each issue created in your projects.' },
@@ -119,12 +139,13 @@ export function IntegrationDetail() {
           <h3>Connected to {github.status.account}</h3>
           <div className="card" style={{ padding: '0 16px' }}>
             {github.status.repositories.map((r) => (
-              <SettingsRow key={r} title={r} desc="Pull requests in this repository reach Tack." />
+              <SettingsRow key={r} title={r} desc="Commits pushed to this repository reach Tack." />
             ))}
           </div>
           <p className="faint" style={{ marginTop: 8 }}>Add or remove repositories in the app's settings on GitHub.</p>
         </section>
       )}
+      {isGithub && github.status?.connected && <UnlinkedCommits />}
       <section className="settings-section" style={{ opacity: i.enabled ? 1 : 0.5, pointerEvents: i.enabled ? undefined : 'none' }}>
         <h3>Configuration</h3>
         <div className="card" style={{ padding: '0 16px' }}>
